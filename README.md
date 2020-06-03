@@ -2,6 +2,11 @@
 
 Simple event dispatcher.
 
+## Installation
+```shell script
+$ composer require zippovich2/event-dispatcher
+```
+
 ## Usage
 1. Default usage:
     ```php
