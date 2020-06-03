@@ -42,7 +42,7 @@ class TraceableEventDispatcherTest extends TestCase
     {
         static::assertEquals([], $this->dispatcher->getSubscribers());
         static::assertEquals([], $this->dispatcher->getCallStack());
-        static::assertEquals([], $this->dispatcher->getSubscribers());
+        static::assertEquals([], $this->dispatcher->getCallStackTree());
     }
 
     public function testGetCallStack(): void
