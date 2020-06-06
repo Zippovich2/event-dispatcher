@@ -15,7 +15,15 @@ namespace Zippovich2\EventDispatcher;
 
 class TraceableEventDispatcher extends EventDispatcher implements TraceableEventDispatcherInterface
 {
-    private $callStack = [];
+    /**
+     * @var EventWatcher
+     */
+    private $eventWatcher;
+
+    public function __construct(EventWatcher $eventWatcher)
+    {
+        $this->eventWatcher = $eventWatcher;
+    }
 
     /**
      * {@inheritdoc}
@@ -23,10 +31,14 @@ class TraceableEventDispatcher extends EventDispatcher implements TraceableEvent
     public function dispatch(string $event): array
     {
         if (isset($this->subscribers[$event])) {
+            $this->eventWatcher->startEvent($event);
+
             foreach ($this->subscribers[$event] as $subscriber) {
-                $this->addCallToStack($subscriber, $event);
+                $this->eventWatcher->addEventSubscriber($this->getCallableName($subscriber));
                 $subscriber();
             }
+
+            $this->eventWatcher->stopEvent($event);
         }
 
         return $this->getCallStackTree();
@@ -37,7 +49,13 @@ class TraceableEventDispatcher extends EventDispatcher implements TraceableEvent
      */
     public function getCallStack(): array
     {
-        return $this->callStack;
+        $callstack = [];
+
+        foreach ($this->eventWatcher->getSubscribers() as $subscriber) {
+            $callstack[] = [$subscriber['subscriber'], $subscriber['event']];
+        }
+
+        return $callstack;
     }
 
     /**
@@ -45,7 +63,7 @@ class TraceableEventDispatcher extends EventDispatcher implements TraceableEvent
      */
     public function getCallStackTree(): array
     {
-        return $this->buildCallStackTree($this->callStack);
+        return $this->buildCallStackTree($this->eventWatcher->getSubscribers());
     }
 
     /**
@@ -53,55 +71,50 @@ class TraceableEventDispatcher extends EventDispatcher implements TraceableEvent
      */
     public function resetCallStack(): void
     {
-        $this->callStack = [];
+        $this->eventWatcher->reset();
     }
 
     /**
-     * Add subscriber and event name to call stack.
-     */
-    private function addCallToStack(callable $subscriber, string $eventName): void
-    {
-        $this->callStack[] = [$this->getCallableName($subscriber), $eventName];
-    }
-
-    /**
-     * Build call stack tree from raw callstack.
+     * Build call stack tree.
      *
      * @return array
      */
-    private function buildCallStackTree(array $callstack, ?string $eventName = null)
+    private function buildCallStackTree(array $subscribers, ?string $parentEvent = null)
     {
         $tree = [];
 
-        if (empty($callstack)) {
-            return $tree;
-        }
+        foreach ($subscribers as $i => $subscriber) {
+            if ($subscriber['parent'] === $parentEvent) {
+                $branch = ['subscriber' => $subscriber['subscriber']];
 
-        if (null === $eventName) {
-            $eventName = $callstack[0][1];
-        }
+                $children = $this->buildCallStackTree($this->getNestedSubscribers($subscriber, \array_slice($subscribers, $i + 1)), $subscriber['event']);
 
-        foreach ($callstack as $i => $call) {
-            [$callbackName, $callbackEventName] = $call;
-
-            if ($eventName === $callbackEventName) {
-                $branch = ['subscriber' => $callbackName];
-
-                // Getting children of current event - loop until current event name match
-                $childCallbacks = [];
-
-                for ($j = $i + 1; $j < \count($callstack) && $callstack[$j][1] !== $eventName; ++$j) {
-                    $childCallbacks[] = $callstack[$j];
+                if (!empty($children)) {
+                    $branch['children'] = $children;
                 }
 
-                if ($childCallbacks) {
-                    $branch['children'] = $this->buildCallStackTree($childCallbacks, $childCallbacks[0][1]);
-                }
                 $tree[] = $branch;
             }
         }
 
         return $tree;
+    }
+
+    private function getNestedSubscribers(array $subscriber, array $remainingSubscribers): array
+    {
+        $childrenSubscribers = [];
+
+        foreach ($remainingSubscribers as $remainingSubscriber) {
+            if ($remainingSubscriber['level'] <= $subscriber['level']
+                || $remainingSubscriber['event'] === $subscriber['event']
+            ) {
+                break;
+            }
+
+            $childrenSubscribers[] = $remainingSubscriber;
+        }
+
+        return $childrenSubscribers;
     }
 
     /**
