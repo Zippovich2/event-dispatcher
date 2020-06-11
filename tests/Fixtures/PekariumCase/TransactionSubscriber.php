@@ -9,7 +9,7 @@
  * file that was distributed with this source code.
  */
 
-namespace Zippovich2\EventDispatcher\Tests\Fixtures;
+namespace Zippovich2\EventDispatcher\Tests\Fixtures\PekariumCase;
 
 use Zippovich2\EventDispatcher\TraceableEventDispatcherInterface;
 
